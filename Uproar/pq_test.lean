@@ -60,7 +60,7 @@ def roundTrip (P : Protocol) (label : String) : Except String Unit := do
 
 def kemProtocols : List Protocol := Id.run do
   let mut out := []
-  for k in Suites.kems do
+  for k in [Suites.mlkem768, Suites.mlkem768X25519] do
     for p in Patterns.pq ++ Patterns.pqPsk do
       out := out ++ [⟨p, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩]
   -- the remaining ciphers and hashes, on pqXX and pqIK
@@ -68,6 +68,11 @@ def kemProtocols : List Protocol := Id.run do
     for h in Suites.hashes do
       for p in [Patterns.pqXX, Patterns.pqIK] do
         out := out ++ [⟨p, .kem Suites.mlkem768 Suites.mlkem768X25519, c, h⟩]
+  -- the other ML-KEM sizes, separately and as distinct ephemeral and static KEMs
+  for p in [Patterns.pqXX, Patterns.pqIK] do
+    out := out ++ [⟨p, .kem Suites.mlkem512 Suites.mlkem512, Suites.chaChaPoly, Suites.blake2s⟩,
+                   ⟨p, .kem Suites.mlkem1024 Suites.mlkem1024, Suites.chaChaPoly, Suites.blake2s⟩,
+                   ⟨p, .kem Suites.mlkem512 Suites.mlkem1024, Suites.aesGCM, Suites.sha512⟩]
   return out
 
 def bad (preResponder : List Token) (messages : List (List Token)) : HandshakePattern :=
