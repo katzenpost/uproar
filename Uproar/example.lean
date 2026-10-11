@@ -27,6 +27,7 @@ def run (P : Protocol) : IO Unit := do
   if !same then throw (IO.userError "handshake hashes differ")
 
 def main : IO Unit := do
-  run ⟨Patterns.pqXX, .kem Suites.mlkem768 Suites.mlkem768, Suites.chaChaPoly, Suites.blake2s⟩
-  run ⟨Patterns.pqXX, .kem Suites.mlkem768X25519 Suites.mlkem768X25519, Suites.chaChaPoly,
-    Suites.blake2s⟩
+  for name in ["MLKEM768", "MLKEM768X25519"] do
+    match Suites.kemByName name with
+    | some k => run ⟨Patterns.pqXX, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩
+    | none => throw (IO.userError s!"{name} is not registered")

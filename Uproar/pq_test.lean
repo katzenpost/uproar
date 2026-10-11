@@ -60,19 +60,24 @@ def roundTrip (P : Protocol) (label : String) : Except String Unit := do
 
 def kemProtocols : List Protocol := Id.run do
   let mut out := []
-  for k in [Suites.mlkem768, Suites.mlkem768X25519] do
+  let some mlkem768 := Suites.kemByName "MLKEM768" | return []
+  let some hybrid := Suites.kemByName "MLKEM768X25519" | return []
+  let some mlkem512 := Suites.kemByName "MLKEM512" | return []
+  let some mlkem1024 := Suites.kemByName "MLKEM1024" | return []
+  for k in [mlkem768, hybrid] do
     for p in Patterns.pq ++ Patterns.pqPsk do
       out := out ++ [⟨p, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩]
   -- the remaining ciphers and hashes, on pqXX and pqIK
   for c in Suites.ciphers do
     for h in Suites.hashes do
       for p in [Patterns.pqXX, Patterns.pqIK] do
-        out := out ++ [⟨p, .kem Suites.mlkem768 Suites.mlkem768X25519, c, h⟩]
-  -- the other ML-KEM sizes, separately and as distinct ephemeral and static KEMs
+        out := out ++ [⟨p, .kem mlkem768 hybrid, c, h⟩]
+  -- distinct ephemeral and static KEM sizes
   for p in [Patterns.pqXX, Patterns.pqIK] do
-    out := out ++ [⟨p, .kem Suites.mlkem512 Suites.mlkem512, Suites.chaChaPoly, Suites.blake2s⟩,
-                   ⟨p, .kem Suites.mlkem1024 Suites.mlkem1024, Suites.chaChaPoly, Suites.blake2s⟩,
-                   ⟨p, .kem Suites.mlkem512 Suites.mlkem1024, Suites.aesGCM, Suites.sha512⟩]
+    out := out ++ [⟨p, .kem mlkem512 mlkem1024, Suites.aesGCM, Suites.sha512⟩]
+  -- every registered KEM, once
+  for k in Suites.kems do
+    out := out ++ [⟨Patterns.pqXX, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩]
   return out
 
 def bad (preResponder : List Token) (messages : List (List Token)) : HandshakePattern :=

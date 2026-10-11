@@ -11,9 +11,6 @@ import CryptWalker.Hash.Sha512
 import CryptWalker.Hash.HKDF
 import CryptWalker.Hash.Blake2s
 import CryptWalker.NIKE.X25519_montgomery_ladder
-import CryptWalker.KEM.MLKEM.MLKEM512
-import CryptWalker.KEM.MLKEM.MLKEM768
-import CryptWalker.KEM.MLKEM.MLKEM1024
 import CryptWalker.KEM.Schemes
 
 /-! # Concrete primitives, under their Noise names -/
@@ -38,26 +35,22 @@ def blake2s : HashFn := ⟨CryptWalker.Hash.Blake2s.Scheme, "BLAKE2s"⟩
 /-- X25519, which the Noise spec names `25519`. -/
 def x25519 : DH := ⟨CryptWalker.NIKE.X25519_montgomery_ladder.LadderScheme, "25519"⟩
 
-def mlkem512 : KEMFn := ⟨CryptWalker.KEM.MLKEM512.kemMLKEM512Seed, "MLKEM512"⟩
-def mlkem768 : KEMFn := ⟨CryptWalker.KEM.MLKEM768.kemMLKEM768Seed, "MLKEM768"⟩
-def mlkem1024 : KEMFn := ⟨CryptWalker.KEM.MLKEM1024.kemMLKEM1024Seed, "MLKEM1024"⟩
-
-/-- CryptWalker's split-PRF combination of X25519 and ML-KEM-768: a KEM like any other. -/
-def mlkem768X25519 : KEMFn := ⟨CryptWalker.KEM.kemMLKEM768X25519, "MLKEM768X25519"⟩
-
 def ciphers : List Cipher := [chaChaPoly, aesGCM]
 def hashes : List HashFn := [sha256, sha512, blake2b, blake2s]
 def dhs : List DH := [x25519]
-def kems : List KEMFn := [mlkem512, mlkem768, mlkem1024, mlkem768X25519]
+/-- Every KEM in CryptWalker's registry, under its registry name. -/
+def kems : List KEMFn := CryptWalker.KEM.registry.map fun e => ⟨e.scheme, e.name⟩
+
+def kemByName (name : String) : Option KEMFn := kems.find? (·.name == name)
 
 def exchangeByName (name : String) : Option Exchange :=
   match dhs.find? (·.name == name) with
   | some d => some (.dh d)
   | none =>
     match name.splitOn "+" with
-    | [k] => (kems.find? (·.name == k)).map fun k => .kem k k
+    | [k] => (kemByName k).map fun k => .kem k k
     | [e, s] =>
-      match kems.find? (·.name == e), kems.find? (·.name == s) with
+      match kemByName e, kemByName s with
       | some e, some s => some (.kem e s)
       | _, _ => none
     | _ => none
