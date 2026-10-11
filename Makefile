@@ -13,7 +13,7 @@ TESTS := \
 EXES      := $(TESTS) Uproar.example
 TEST_BINS := $(addprefix $(BIN)/,$(subst .,-,$(TESTS)))
 
-.PHONY: all build test axioms verify-vectors
+.PHONY: all build test axioms verify-vectors clatter-vectors
 
 all: build
 
@@ -38,3 +38,8 @@ verify-vectors:
 
 axioms: build
 	@./scripts/check-axioms.sh
+
+# Regenerate testdata/clatter_pq.json; needs cargo and a clatter checkout at ../clatter.
+clatter-vectors:
+	cd tools/clatter-vectors && cargo run --release -q > ../../testdata/clatter_pq.json
+	cd testdata && sha256sum clatter_pq.json > clatter_pq.json.sha256

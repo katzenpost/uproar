@@ -41,7 +41,8 @@ def config (P : Protocol) (j : Json) (side : String) (initiator : Bool) : Except
     prologue := (← hexOf j s!"{side}_prologue").getD ByteArray.empty
     rs := ← hexOf j s!"{side}_remote_static"
     psks := ← hexList j s!"{side}_psks"
-    seeds := fun _ => Vector.replicate 32 0 }
+    seeds := let seeds := (← hexList j s!"{side}_encap_seeds").toArray
+      fun i => CryptWalker.Util.Bytes.toVecN 32 (seeds.getD i ByteArray.empty) }
 
 def runVector (P : Protocol) (j : Json) : Except String Unit := do
   let mut ini := Party.hs (← lift (HandshakeState.initialize P (← config P j "init" true)))
@@ -83,4 +84,5 @@ def runFile (path : String) : IO (Nat × Nat × Nat) := do
 def main : IO UInt32 := do
   let (_, _, f1) ← runFile "testdata/cacophony.txt"
   let (_, _, f2) ← runFile "testdata/snow.txt"
-  pure (if f1 + f2 == 0 then 0 else 1)
+  let (_, _, f3) ← runFile "testdata/clatter_pq.json"
+  pure (if f1 + f2 + f3 == 0 then 0 else 1)
