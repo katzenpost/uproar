@@ -1,0 +1,23 @@
+name = "uproar"
+defaultTargets = ["Uproar"]
+
+[leanOptions]
+pp.unicode.fun = true
+autoImplicit = false
+relaxedAutoImplicit = false
+
+[[require]]
+name = "CryptWalker"
+path = "../CryptWalker"
+
+[[lean_lib]]
+name = "Uproar"
+
+[[lean_exe]]
+name = "Uproar.vectors_test"
+
+[[lean_exe]]
+name = "Uproar.pq_test"
+
+[[lean_exe]]
+name = "Uproar.example"
