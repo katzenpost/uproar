@@ -8,7 +8,8 @@ relaxedAutoImplicit = false
 
 [[require]]
 name = "CryptWalker"
-path = "../CryptWalker"
+git = "https://github.com/katzenpost/CryptWalker.git"
+rev = "main"
 
 [[lean_lib]]
 name = "Uproar"
