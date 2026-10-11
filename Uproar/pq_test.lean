@@ -4,9 +4,9 @@ import Uproar.IO
 
 open Uproar
 
-/-! PQ Noise self-test: every PQ pattern, with and without PSKs, under each KEM. Both parties are
-built from fresh keys, run the handshake and a round of transport messages, and must agree on the
-handshake hash; a flipped ciphertext bit must be rejected. -/
+/-! PQ Noise self-test: pqXX under every KEM in CryptWalker's registry. Both parties are built from
+fresh keys, run the handshake and a round of transport messages, and must agree on the handshake
+hash; a flipped ciphertext bit must be rejected. -/
 
 def seedsFrom (label : String) : Nat → Vector UInt8 32 := seedStream label.toUTF8
 
@@ -58,29 +58,10 @@ def roundTrip (P : Protocol) (label : String) : Except String Unit := do
     (ini, res) := if fromInit then (sender, receiver') else (receiver', sender)
   if ini.handshakeHash != res.handshakeHash then throw "handshake hashes differ"
 
-def kemProtocols : List Protocol := Id.run do
-  let mut out := []
-  let some mlkem768 := Suites.kemByName "MLKEM768" | return []
-  let some hybrid := Suites.kemByName "MLKEM768X25519" | return []
-  let some mlkem512 := Suites.kemByName "MLKEM512" | return []
-  let some mlkem1024 := Suites.kemByName "MLKEM1024" | return []
-  let everyPattern := [mlkem768, hybrid]
-  for k in everyPattern do
-    for p in Patterns.pq ++ Patterns.pqPsk do
-      out := out ++ [⟨p, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩]
-  -- the remaining ciphers and hashes, on pqXX and pqIK
-  for c in Suites.ciphers do
-    for h in Suites.hashes do
-      for p in [Patterns.pqXX, Patterns.pqIK] do
-        out := out ++ [⟨p, .kem mlkem768 hybrid, c, h⟩]
-  -- distinct ephemeral and static KEM sizes
-  for p in [Patterns.pqXX, Patterns.pqIK] do
-    out := out ++ [⟨p, .kem mlkem512 mlkem1024, Suites.aesGCM, Suites.sha512⟩]
-  -- every other registered KEM, once
-  for k in Suites.kems do
-    unless everyPattern.any (·.name == k.name) do
-      out := out ++ [⟨Patterns.pqXX, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩]
-  return out
+/-- pqXX over each KEM in CryptWalker's registry. Patterns, ciphers and hashes are covered by the
+clatter vectors. -/
+def kemProtocols : List Protocol :=
+  Suites.kems.map fun k => ⟨Patterns.pqXX, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩
 
 def bad (preResponder : List Token) (messages : List (List Token)) : HandshakePattern :=
   { base := "bad", preInitiator := [], preResponder, messages }
@@ -98,10 +79,6 @@ def invalidPatterns : List (String × HandshakePattern) :=
    ("payload after se without ee", bad [] [[.e], [.s], [.s, .se]])]
 
 def main : IO UInt32 := do
-  let names := kemProtocols.map Protocol.name
-  if names.eraseDups.length != names.length then
-    IO.println "  FAIL  a protocol is listed more than once"
-    return 1
   let mut failed := 0
   let mut passed := 0
   for P in kemProtocols do
