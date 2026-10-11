@@ -64,7 +64,8 @@ def kemProtocols : List Protocol := Id.run do
   let some hybrid := Suites.kemByName "MLKEM768X25519" | return []
   let some mlkem512 := Suites.kemByName "MLKEM512" | return []
   let some mlkem1024 := Suites.kemByName "MLKEM1024" | return []
-  for k in [mlkem768, hybrid] do
+  let everyPattern := [mlkem768, hybrid]
+  for k in everyPattern do
     for p in Patterns.pq ++ Patterns.pqPsk do
       out := out ++ [⟨p, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩]
   -- the remaining ciphers and hashes, on pqXX and pqIK
@@ -75,9 +76,10 @@ def kemProtocols : List Protocol := Id.run do
   -- distinct ephemeral and static KEM sizes
   for p in [Patterns.pqXX, Patterns.pqIK] do
     out := out ++ [⟨p, .kem mlkem512 mlkem1024, Suites.aesGCM, Suites.sha512⟩]
-  -- every registered KEM, once
+  -- every other registered KEM, once
   for k in Suites.kems do
-    out := out ++ [⟨Patterns.pqXX, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩]
+    unless everyPattern.any (·.name == k.name) do
+      out := out ++ [⟨Patterns.pqXX, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩]
   return out
 
 def bad (preResponder : List Token) (messages : List (List Token)) : HandshakePattern :=
@@ -96,6 +98,10 @@ def invalidPatterns : List (String × HandshakePattern) :=
    ("payload after se without ee", bad [] [[.e], [.s], [.s, .se]])]
 
 def main : IO UInt32 := do
+  let names := kemProtocols.map Protocol.name
+  if names.eraseDups.length != names.length then
+    IO.println "  FAIL  a protocol is listed more than once"
+    return 1
   let mut failed := 0
   let mut passed := 0
   for P in kemProtocols do
