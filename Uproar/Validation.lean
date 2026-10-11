@@ -94,29 +94,51 @@ def stepToken (hasPsk : Bool) (initiator : Bool) (w : Walk) (kemOrder : Nat) (t 
     let w := if w.pskSeen then w else w.setParty initiator { me with fresh := true }
     pure ({ w with keyed := true }, 2)
 
+def stepTokens (hasPsk : Bool) (initiator : Bool) (w : Walk) (kemOrder : Nat) :
+    List Token → Check Walk
+  | [] => pure w
+  | t :: ts => do
+    let (w, k) ← stepToken hasPsk initiator w kemOrder t
+    stepTokens hasPsk initiator w k ts
+
 def stepMessage (hasPsk : Bool) (initiator : Bool) (w : Walk) (msg : List Token) : Check Walk := do
-  let (w, _) ← msg.foldlM (fun (w, k) t => stepToken hasPsk initiator w k t) (w, 0)
+  let w ← stepTokens hasPsk initiator w 0 msg
   if !w.payloadSafe initiator then throw "payload before the matching ephemeral DH"
   encrypting w initiator
   pure w
 
-def validate (p : HandshakePattern) : Check Unit := do
+def stepMessages (p : HandshakePattern) (w : Walk) (i : Nat) : List (List Token) → Check Walk
+  | [] => pure w
+  | m :: ms => do
+    let w ← stepMessage p.hasPsk (p.initiatorSends i) w m
+    stepMessages p w (i + 1) ms
+
+/-- The walk's starting point: what the pre-messages have already sent. -/
+def Walk.initial (p : HandshakePattern) : Walk :=
+  { init := { sentE := p.preInitiator.contains .e, sentS := p.preInitiator.contains .s,
+              fresh := p.preInitiator.contains .e }
+    resp := { sentE := p.preResponder.contains .e, sentS := p.preResponder.contains .s,
+              fresh := p.preResponder.contains .e }
+    keyed := p.hasPsk && (p.preInitiator.contains .e || p.preResponder.contains .e) }
+
+def shapeCheck (p : HandshakePattern) : Check Unit := do
   if !preMessageOk p.preInitiator || !preMessageOk p.preResponder then
     throw "pre-message must be e, s, or e, s"
   if p.preInitiator.contains .psk || p.preResponder.contains .psk then throw "psk in pre-message"
   if p.messages.any (·.any Token.isDH) && p.isKEM then throw "DH and KEM tokens mixed"
   if p.messages.isEmpty then throw "no messages"
-  let w : Walk := {
-    init := { sentE := p.preInitiator.contains .e, sentS := p.preInitiator.contains .s,
-              fresh := p.preInitiator.contains .e }
-    resp := { sentE := p.preResponder.contains .e, sentS := p.preResponder.contains .s,
-              fresh := p.preResponder.contains .e }
-    keyed := p.hasPsk && (p.preInitiator.contains .e || p.preResponder.contains .e) }
-  let (w, _) ← p.messages.foldlM (fun (w, i) m => do
-    pure (← stepMessage p.hasPsk (p.initiatorSends i) w m, i + 1)) (w, 0)
+
+/-- Transport messages follow the last handshake message, so the payload rule applies once more,
+to each party that sends them. -/
+def transportCheck (p : HandshakePattern) (w : Walk) : Check Unit := do
   if !w.payloadSafe true then throw "initiator transport before the matching ephemeral DH"
   if !p.oneWay && !w.payloadSafe false then
     throw "responder transport before the matching ephemeral DH"
+
+def validate (p : HandshakePattern) : Check Unit := do
+  shapeCheck p
+  let w ← stepMessages p (Walk.initial p) 0 p.messages
+  transportCheck p w
 
 def isValid (p : HandshakePattern) : Bool := (validate p).toBool
 

@@ -8,3 +8,6 @@ import Uproar.Transport
 import Uproar.Suites
 import Uproar.IO
 import Uproar.Session
+import Uproar.Correctness.Symmetric
+import Uproar.Correctness.Keys
+import Uproar.Correctness.Handshake

@@ -129,15 +129,19 @@ def ofPrivate (b : ByteArray) : Result KeyPair := do
   let sk ← D.decodePriv b
   pure ⟨b, ofVector (D.nike.encodePublicKey (D.nike.derivePublicKey sk))⟩
 
-/-- `DH(sk, pk)`, refusing a public key outside the NIKE's safe set. -/
-def dh (sk pk : ByteArray) : Result ByteArray := do
-  let sk ← D.decodePriv sk
-  if pk.size ≠ D.nike.publicKeySize then throw .invalidPublicKey
-  let some pk := D.nike.decodePublicKey (toVecN _ pk) | throw .invalidPublicKey
-  haveI := D.nike.decSafe
-  if h : D.nike.Safe pk then
-    pure (ofVector (D.nike.encodeSharedSecret (D.nike.groupAction sk ⟨pk, h⟩)))
+def decodePub (b : ByteArray) : Result {pk : D.nike.PublicKey // D.nike.Safe pk} :=
+  if b.size = D.nike.publicKeySize then
+    match D.nike.decodePublicKey (toVecN _ b) with
+    | some pk =>
+      haveI := D.nike.decSafe
+      if h : D.nike.Safe pk then pure ⟨pk, h⟩ else throw .invalidPublicKey
+    | none => throw .invalidPublicKey
   else throw .invalidPublicKey
+
+/-- `DH(sk, pk)`, refusing a public key outside the NIKE's safe set. -/
+def dh (sk pk : ByteArray) : Result ByteArray :=
+  (D.decodePriv sk).bind fun sk => (D.decodePub pk).map fun pk =>
+    ofVector (D.nike.encodeSharedSecret (D.nike.groupAction sk pk))
 
 end DH
 
@@ -176,18 +180,29 @@ def ofPrivate (b : ByteArray) : Result KeyPair := do
   pure ⟨b, ofVector (K.kem.encodePublicKey (K.kem.derivePublicKey sk))⟩
 
 /-- Encapsulate to `pk` with coins drawn from `seed`, returning `(ciphertext, shared secret)`. -/
-def encap (pk : ByteArray) (seed : Vector UInt8 32) : Result (ByteArray × ByteArray) := do
-  if pk.size ≠ K.kem.publicKeySize then throw .invalidPublicKey
-  let some pk := K.kem.decodePublicKey (toVecN _ pk) | throw .invalidPublicKey
-  let (c, k) ← K.run (K.kem.encap pk) seed
-  pure (ofVector (K.kem.encodeCiphertext c), ofVector (K.kem.encodePlaintext k))
+def decodePub (b : ByteArray) : Result K.kem.PublicKey :=
+  if b.size = K.kem.publicKeySize then
+    match K.kem.decodePublicKey (toVecN _ b) with
+    | some pk => pure pk
+    | none => throw .invalidPublicKey
+  else throw .invalidPublicKey
 
-def decap (sk ct : ByteArray) : Result ByteArray := do
-  let sk ← K.decodePriv sk
-  if ct.size ≠ K.kem.ciphertextSize then throw .invalidCiphertext
-  let some c := K.kem.decodeCiphertext (toVecN _ ct) | throw .invalidCiphertext
-  let k ← K.run (K.kem.decap sk c) (Vector.replicate 32 0)
-  pure (ofVector (K.kem.encodePlaintext k))
+def decodeCt (b : ByteArray) : Result K.kem.Ciphertext :=
+  if b.size = K.kem.ciphertextSize then
+    match K.kem.decodeCiphertext (toVecN _ b) with
+    | some c => pure c
+    | none => throw .invalidCiphertext
+  else throw .invalidCiphertext
+
+/-- Encapsulate to `pk` with coins drawn from `seed`, returning `(ciphertext, shared secret)`. -/
+def encap (pk : ByteArray) (seed : Vector UInt8 32) : Result (ByteArray × ByteArray) :=
+  (K.decodePub pk).bind fun pk =>
+    (K.run (K.kem.encap pk) seed).map fun (c, k) =>
+      (ofVector (K.kem.encodeCiphertext c), ofVector (K.kem.encodePlaintext k))
+
+def decap (sk ct : ByteArray) : Result ByteArray :=
+  (K.decodePriv sk).bind fun sk => (K.decodeCt ct).bind fun c =>
+    (K.run (K.kem.decap sk c) (Vector.replicate 32 0)).map fun k => ofVector (K.kem.encodePlaintext k)
 
 end KEMFn
 

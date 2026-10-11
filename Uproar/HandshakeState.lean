@@ -69,8 +69,7 @@ def decryptAndHash (st : HandshakeState) (ct : ByteArray) : Result (ByteArray ×
   let (pt, ss) ← st.ss.decryptAndHash P.cipher P.hash ct
   pure (pt, { st with ss })
 
-def nextSeed (st : HandshakeState) : Vector UInt8 32 × HandshakeState :=
-  (st.seeds st.draws, { st with draws := st.draws + 1 })
+def drawn (st : HandshakeState) : HandshakeState := { st with draws := st.draws + 1 }
 
 def ePubLen : Nat :=
   match P.exchange with
@@ -86,62 +85,75 @@ def generateE (st : HandshakeState) : Result (KeyPair × HandshakeState) :=
   match st.e with
   | some kp => pure (kp, st)
   | none =>
-    let (seed, st) := st.nextSeed
     match P.exchange with
-    | .dh d => pure (d.ofSeed seed, st)
-    | .kem e _ => do pure (← e.ofSeed seed, st)
+    | .dh d => pure (d.ofSeed (st.seeds st.draws), st.drawn)
+    | .kem e _ => (e.ofSeed (st.seeds st.draws)).map (·, st.drawn)
 
 def need {α} (x : Option α) (which : String) : Result α :=
   match x with
   | some a => pure a
   | none => throw (.missingKey which)
 
-/-- The keys behind a DH token, from this party's side. -/
-def dhToken (st : HandshakeState) (t : Token) : Result HandshakeState := do
-  let .dh d := P.exchange | throw .wrongExchange
-  let (mine, theirs) ← match t, st.initiator with
-    | .ee, _ => pure ((← need st.e "e").priv, ← need st.re "re")
-    | .ss, _ => pure ((← need st.s "s").priv, ← need st.rs "rs")
-    | .es, true | .se, false => pure ((← need st.e "e").priv, ← need st.rs "rs")
-    | .es, false | .se, true => pure ((← need st.s "s").priv, ← need st.re "re")
-    | _, _ => throw (.invalidPattern "not a DH token")
-  pure (mixKey P st (← d.dh mine theirs))
+/-- Whether a DH token combines this party's static (`true`) or ephemeral key with the peer's
+static or ephemeral key. -/
+def dhRoles (t : Token) (initiator : Bool) : Option (Bool × Bool) :=
+  match t, initiator with
+  | .ee, _ => some (false, false)
+  | .ss, _ => some (true, true)
+  | .es, true | .se, false => some (false, true)
+  | .es, false | .se, true => some (true, false)
+  | _, _ => none
 
-def writeToken (acc : ByteArray × HandshakeState) (t : Token) :
-    Result (ByteArray × HandshakeState) := do
-  let (buf, st) := acc
+def ownKey (st : HandshakeState) (static : Bool) : Option KeyPair := if static then st.s else st.e
+
+def peerKey (st : HandshakeState) (static : Bool) : Option ByteArray :=
+  if static then st.rs else st.re
+
+def dhToken (st : HandshakeState) (t : Token) : Result HandshakeState :=
+  match P.exchange, dhRoles t st.initiator with
+  | .dh d, some (mine, theirs) => do
+    let kp ← need (ownKey st mine) (if mine then "s" else "e")
+    let pk ← need (peerKey st theirs) (if theirs then "rs" else "re")
+    pure (mixKey P st (← d.dh kp.priv pk))
+  | .dh _, none => throw (.invalidPattern "not a DH token")
+  | .kem _ _, _ => throw .wrongExchange
+
+/-- One token: the bytes it puts on the wire, and the state after. -/
+def writeToken (st : HandshakeState) (t : Token) : Result (ByteArray × HandshakeState) := do
   match t with
   | .e =>
     let (kp, st) ← generateE P st
     let st := mixHash P { st with e := some kp } kp.pub
-    let st := if P.pattern.hasPsk then mixKey P st kp.pub else st
-    pure (buf ++ kp.pub, st)
-  | .s =>
-    let (ct, st) ← encryptAndHash P st (← need st.s "s").pub
-    pure (buf ++ ct, st)
-  | .ee | .es | .se | .ss => pure (buf, ← dhToken P st t)
+    pure (kp.pub, if P.pattern.hasPsk then mixKey P st kp.pub else st)
+  | .s => encryptAndHash P st (← need st.s "s").pub
+  | .ee | .es | .se | .ss => pure (ByteArray.empty, ← dhToken P st t)
   | .psk =>
     let psk :: psks := st.psks | throw .missingPsk
-    pure (buf, mixKeyAndHash P { st with psks } psk)
+    pure (ByteArray.empty, mixKeyAndHash P { st with psks } psk)
   | .ekem =>
     let .kem ekem _ := P.exchange | throw .wrongExchange
-    let (seed, st) := st.nextSeed
-    let (ct, k) ← ekem.encap (← need st.re "re") seed
-    pure (buf ++ ct, mixKey P (mixHash P st ct) k)
+    let (ct, k) ← ekem.encap (← need st.re "re") (st.seeds st.draws)
+    pure (ct, mixKey P (mixHash P st.drawn ct) k)
   | .skem =>
     let .kem _ skem := P.exchange | throw .wrongExchange
-    let (seed, st) := st.nextSeed
-    let (ct, k) ← skem.encap (← need st.rs "rs") seed
-    let (ect, st) ← encryptAndHash P st ct
-    pure (buf ++ ect, mixKeyAndHash P st k)
+    let (ct, k) ← skem.encap (← need st.rs "rs") (st.seeds st.draws)
+    let (ect, st) ← encryptAndHash P st.drawn ct
+    pure (ect, mixKeyAndHash P st k)
+
+def writeTokens (st : HandshakeState) : List Token → Result (ByteArray × HandshakeState)
+  | [] => pure (ByteArray.empty, st)
+  | t :: ts => do
+    let (o, st) ← writeToken P st t
+    let (os, st) ← writeTokens st ts
+    pure (o ++ os, st)
 
 def take (msg : ByteArray) (n : Nat) : Result (ByteArray × ByteArray) :=
   if msg.size < n then throw .messageTooShort
   else pure (msg.extract 0 n, msg.extract n msg.size)
 
-def readToken (acc : ByteArray × HandshakeState) (t : Token) :
+/-- One token read from the front of `msg`: the rest of the message, and the state after. -/
+def readToken (st : HandshakeState) (msg : ByteArray) (t : Token) :
     Result (ByteArray × HandshakeState) := do
-  let (msg, st) := acc
   match t with
   | .e =>
     let (re, msg) ← take msg (ePubLen P)
@@ -167,17 +179,29 @@ def readToken (acc : ByteArray × HandshakeState) (t : Token) :
     let k ← skem.decap (← need st.s "s").priv ct
     pure (msg, mixKeyAndHash P st k)
 
+def readTokens (st : HandshakeState) (msg : ByteArray) : List Token → Result (ByteArray × HandshakeState)
+  | [] => pure (msg, st)
+  | t :: ts => do
+    let (msg, st) ← readToken P st msg t
+    readTokens st msg ts
+
+/-- Pre-messages carry public keys only: `e` the ephemeral (`false`), `s` the static (`true`). -/
+def preKey : Token → Option Bool
+  | .e => some false
+  | .s => some true
+  | _ => none
+
 /-- A pre-message key is the sender's own when this party sent it, otherwise the remote one. -/
-def preMessage (sender : Bool) (st : HandshakeState) (t : Token) : Result HandshakeState := do
-  let mine := sender == st.initiator
-  let key ← match t, mine with
-    | .e, true => pure (← need st.e "e").pub
-    | .s, true => pure (← need st.s "s").pub
-    | .e, false => need st.re "re"
-    | .s, false => need st.rs "rs"
-    | _, _ => throw (.invalidPattern "pre-message token")
-  let st := mixHash P st key
-  pure (if t == .e && P.pattern.hasPsk then mixKey P st key else st)
+def preMessageKey (sender : Bool) (st : HandshakeState) (static : Bool) : Result ByteArray :=
+  if sender == st.initiator then (need (ownKey st static) "pre-message key").map (·.pub)
+  else need (peerKey st static) "pre-message key"
+
+def preMessage (sender : Bool) (st : HandshakeState) (t : Token) : Result HandshakeState :=
+  match preKey t with
+  | none => throw (.invalidPattern "pre-message token")
+  | some static => (preMessageKey sender st static).map fun key =>
+    let st := mixHash P st key
+    if !static && P.pattern.hasPsk then mixKey P st key else st
 
 def isFinished (st : HandshakeState) : Bool := st.msgIndex ≥ P.pattern.messages.length
 
@@ -188,7 +212,7 @@ def currentMessage (st : HandshakeState) : Result (List Token) := do
 def writeMessage (st : HandshakeState) (payload : ByteArray) : Result (ByteArray × HandshakeState) := do
   let tokens ← currentMessage P st
   if P.pattern.initiatorSends st.msgIndex != st.initiator then throw .notMyTurn
-  let (buf, st) ← tokens.foldlM (writeToken P) (ByteArray.empty, st)
+  let (buf, st) ← writeTokens P st tokens
   let (ct, st) ← encryptAndHash P st payload
   let msg := buf ++ ct
   if msg.size > maxMessageLen then throw .messageTooLong
@@ -198,7 +222,7 @@ def readMessage (st : HandshakeState) (msg : ByteArray) : Result (ByteArray × H
   let tokens ← currentMessage P st
   if P.pattern.initiatorSends st.msgIndex == st.initiator then throw .notMyTurn
   if msg.size > maxMessageLen then throw .messageTooLong
-  let (rest, st) ← tokens.foldlM (readToken P) (msg, st)
+  let (rest, st) ← readTokens P st msg tokens
   let (pt, st) ← decryptAndHash P st rest
   pure (pt, { st with msgIndex := st.msgIndex + 1 })
 
@@ -210,19 +234,33 @@ def protocolNameValid (name : String) : Bool :=
   name.utf8ByteSize ≤ 255 &&
     name.all fun c => c.isAlphanum || c == '_' || c == '+' || c == '/'
 
-/-- Noise §5.3 `Initialize`: hash the protocol name, the prologue and the pre-message keys. -/
-def HandshakeState.initialize (P : Protocol) (cfg : Config) : Result HandshakeState := do
-  if let .error r := validate P.pattern then throw (.invalidPattern r)
+/-- What `initialize` refuses: an invalid pattern, a pattern of the wrong kind for the exchange,
+or a protocol name outside Noise's rules. -/
+def HandshakeState.check (P : Protocol) : Result Unit :=
+  match validate P.pattern with
+  | .error r => throw (.invalidPattern r)
+  | .ok () => do
   match P.exchange with
   | .dh _ => if P.pattern.isKEM then throw .wrongExchange
   | .kem _ _ => if P.pattern.messages.any (·.any Token.isDH) then throw .wrongExchange
   if !protocolNameValid P.name then throw (.invalidPattern "protocol name")
-  let ss := (SymmetricState.init P.hash P.name.toUTF8).mixHash P.hash cfg.prologue
-  let st : HandshakeState := {
-    initiator := cfg.initiator, ss, s := cfg.s, e := cfg.e, rs := cfg.rs,
-    re := cfg.re, psks := cfg.psks, seeds := cfg.seeds, draws := 0, msgIndex := 0 }
-  let st ← P.pattern.preInitiator.foldlM (HandshakeState.preMessage P true) st
-  P.pattern.preResponder.foldlM (HandshakeState.preMessage P false) st
+
+def HandshakeState.ofConfig (P : Protocol) (cfg : Config) : HandshakeState :=
+  { initiator := cfg.initiator,
+    ss := (SymmetricState.init P.hash P.name.toUTF8).mixHash P.hash cfg.prologue,
+    s := cfg.s, e := cfg.e, rs := cfg.rs, re := cfg.re, psks := cfg.psks, seeds := cfg.seeds,
+    draws := 0, msgIndex := 0 }
+
+def HandshakeState.preMessages (P : Protocol) (sender : Bool) (st : HandshakeState) :
+    List Token → Result HandshakeState
+  | [] => pure st
+  | t :: ts => do preMessages P sender (← HandshakeState.preMessage P sender st t) ts
+
+/-- Noise §5.3 `Initialize`: hash the protocol name, the prologue and the pre-message keys. -/
+def HandshakeState.initialize (P : Protocol) (cfg : Config) : Result HandshakeState := do
+  HandshakeState.check P
+  let st ← HandshakeState.preMessages P true (HandshakeState.ofConfig P cfg) P.pattern.preInitiator
+  HandshakeState.preMessages P false st P.pattern.preResponder
 
 namespace Protocol
 
