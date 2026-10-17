@@ -2,11 +2,11 @@ import Lean.Data.Json
 
 import Uproar.Suites
 import Uproar.Session
-import CryptWalker.Util.newhex
+import Cryptlib.Util.newhex
 
 open Lean
 open Uproar
-open CryptWalker.Util.newhex
+open Cryptlib.Util.newhex
 
 /-! Runs the cacophony and snow vector files: both parties are built from the vector's keys, every
 message is written by its sender and checked against the expected ciphertext, read back by the
@@ -42,7 +42,7 @@ def config (P : Protocol) (j : Json) (side : String) (initiator : Bool) : Except
     rs := ← hexOf j s!"{side}_remote_static"
     psks := ← hexList j s!"{side}_psks"
     seeds := let seeds := (← hexList j s!"{side}_encap_seeds").toArray
-      fun i => CryptWalker.Util.Bytes.toVecN 32 (seeds.getD i ByteArray.empty) }
+      fun i => Cryptlib.Util.Bytes.toVecN 32 (seeds.getD i ByteArray.empty) }
 
 def runVector (P : Protocol) (j : Json) : Except String Unit := do
   let mut ini := Party.hs (← lift (HandshakeState.initialize P (← config P j "init" true)))

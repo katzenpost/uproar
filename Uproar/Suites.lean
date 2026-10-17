@@ -4,14 +4,14 @@ SPDX-License-Identifier: AGPL-3.0-only
 -/
 
 import Uproar.HandshakeState
-import CryptWalker.Cipher.ChaChaPoly
-import CryptWalker.Cipher.AESGCM
-import CryptWalker.Hash.Sha2
-import CryptWalker.Hash.Sha512
-import CryptWalker.Hash.HKDF
-import CryptWalker.Hash.Blake2s
-import CryptWalker.NIKE.X25519_montgomery_ladder
-import CryptWalker.KEM.Schemes
+import Cryptlib.Primitives.Cipher.ChaChaPoly
+import Cryptlib.Primitives.Cipher.AESGCM
+import Cryptlib.Primitives.Hash.Sha2
+import Cryptlib.Primitives.Hash.Sha512
+import Cryptlib.Primitives.Hash.HKDF
+import Cryptlib.Primitives.Hash.Blake2s
+import Cryptlib.Primitives.NIKE.X25519_montgomery_ladder
+import Cryptlib.Primitives.KEM.Schemes
 
 /-! # Concrete primitives, under their Noise names -/
 
@@ -20,26 +20,26 @@ namespace Uproar.Suites
 open Uproar
 
 def chaChaPoly : Cipher :=
-  { aead := CryptWalker.Cipher.ChaChaPoly.Scheme, name := "ChaChaPoly",
+  { aead := Cryptlib.Primitives.Cipher.ChaChaPoly.Scheme, name := "ChaChaPoly",
     keySize_eq := rfl, nonceSize_eq := rfl, tagSize_eq := rfl, bigEndianNonce := false }
 
 def aesGCM : Cipher :=
-  { aead := CryptWalker.Cipher.AESGCM.Scheme, name := "AESGCM",
+  { aead := Cryptlib.Primitives.Cipher.AESGCM.Scheme, name := "AESGCM",
     keySize_eq := rfl, nonceSize_eq := rfl, tagSize_eq := rfl, bigEndianNonce := true }
 
-def sha256 : HashFn := ⟨CryptWalker.Hash.Sha2.Sha256.Scheme, "SHA256"⟩
-def sha512 : HashFn := ⟨CryptWalker.Hash.Sha512.Scheme, "SHA512"⟩
-def blake2b : HashFn := ⟨CryptWalker.Hash.HKDF.blake2b_hashScheme, "BLAKE2b"⟩
-def blake2s : HashFn := ⟨CryptWalker.Hash.Blake2s.Scheme, "BLAKE2s"⟩
+def sha256 : HashFn := ⟨Cryptlib.Primitives.Hash.Sha2.Sha256.Scheme, "SHA256"⟩
+def sha512 : HashFn := ⟨Cryptlib.Primitives.Hash.Sha512.Scheme, "SHA512"⟩
+def blake2b : HashFn := ⟨Cryptlib.Primitives.Hash.HKDF.blake2b_hashScheme, "BLAKE2b"⟩
+def blake2s : HashFn := ⟨Cryptlib.Primitives.Hash.Blake2s.Scheme, "BLAKE2s"⟩
 
 /-- X25519, which the Noise spec names `25519`. -/
-def x25519 : DH := ⟨CryptWalker.NIKE.X25519_montgomery_ladder.LadderScheme, "25519"⟩
+def x25519 : DH := ⟨Cryptlib.Primitives.NIKE.X25519_montgomery_ladder.LadderScheme, "25519"⟩
 
 def ciphers : List Cipher := [chaChaPoly, aesGCM]
 def hashes : List HashFn := [sha256, sha512, blake2b, blake2s]
 def dhs : List DH := [x25519]
-/-- Every KEM in CryptWalker's registry, under its registry name. -/
-def kems : List KEMFn := CryptWalker.KEM.registry.map fun e => ⟨e.scheme, e.name⟩
+/-- Every KEM in Cryptlib's registry, under its registry name. -/
+def kems : List KEMFn := Cryptlib.Primitives.KEM.registry.map fun e => ⟨e.scheme, e.name⟩
 
 def kemByName (name : String) : Option KEMFn := kems.find? (·.name == name)
 

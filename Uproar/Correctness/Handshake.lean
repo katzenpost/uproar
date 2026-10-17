@@ -19,7 +19,7 @@ recovers the payload. The results: `initialize_synced`, `Synced.initiator_writes
 
 namespace Uproar
 
-open CryptWalker.Util.Bytes (ofVector size_ofVector)
+open Cryptlib.Util.Bytes (ofVector size_ofVector)
 
 namespace Protocol
 
@@ -80,8 +80,8 @@ theorem take_append (a b : ByteArray) : take (a ++ b) a.size = .ok (a, b) := by
   unfold take
   rw [if_neg (by rw [ByteArray.size_append]; omega)]
   congr
-  · exact CryptWalker.Util.Bytes.extract_append_left a b
-  · have h := CryptWalker.Util.Bytes.extract_append_right a b
+  · exact Cryptlib.Util.Bytes.extract_append_left a b
+  · have h := Cryptlib.Util.Bytes.extract_append_right a b
     rw [← ByteArray.size_append] at h
     exact h
 

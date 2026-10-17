@@ -1,12 +1,12 @@
 import Uproar.Suites
 import Uproar.Session
 import Uproar.IO
-import CryptWalker.Util.newhex
+import Cryptlib.Util.newhex
 
 open Uproar
 
 /-! pqXX end to end with randomness from the operating system: once over ML-KEM-768 and once over
-CryptWalker's ML-KEM-768 + X25519 combination, then a round of transport messages each way. -/
+Cryptlib's ML-KEM-768 + X25519 combination, then a round of transport messages each way. -/
 
 def run (P : Protocol) : IO Unit := do
   let lift {α} (x : Result α) : IO α := IO.ofExcept (x.mapError reprStr)
@@ -23,7 +23,7 @@ def run (P : Protocol) : IO Unit := do
   for (p, c) in payloads.zip cts do
     IO.println s!"  {p}: {c.size} bytes"
   let same := ini.handshakeHash == res.handshakeHash
-  IO.println s!"  handshake hash {CryptWalker.Util.newhex.byteArrayToHex ini.handshakeHash} (agree: {same})"
+  IO.println s!"  handshake hash {Cryptlib.Util.newhex.byteArrayToHex ini.handshakeHash} (agree: {same})"
   if !same then throw (IO.userError "handshake hashes differ")
 
 def main : IO Unit := do

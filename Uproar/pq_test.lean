@@ -4,7 +4,7 @@ import Uproar.IO
 
 open Uproar
 
-/-! PQ Noise self-test: pqXX under every KEM in CryptWalker's registry. Both parties are built from
+/-! PQ Noise self-test: pqXX under every KEM in Cryptlib's registry. Both parties are built from
 fresh keys, run the handshake and a round of transport messages, and must agree on the handshake
 hash; a flipped ciphertext bit must be rejected. -/
 
@@ -21,7 +21,7 @@ def configs (P : Protocol) (label : String) : Result (Config × Config) := do
   let rS ← if needsStatic p false then
     some <$> P.staticFromPrivate (← staticKey (label ++ "/rs")) else pure none
   let psks := (p.messages.flatten.filter (· == .psk)).zipIdx.map fun (_, i) =>
-    CryptWalker.Util.Bytes.ofVector (seedsFrom (label ++ "/psk") i)
+    Cryptlib.Util.Bytes.ofVector (seedsFrom (label ++ "/psk") i)
   pure ({ initiator := true, s := iS, rs := if p.preResponder.contains .s then rS.map (·.pub) else none,
           psks, prologue := "uproar".toUTF8, seeds := seedsFrom (label ++ "/i") },
         { initiator := false, s := rS, rs := if p.preInitiator.contains .s then iS.map (·.pub) else none,
@@ -58,7 +58,7 @@ def roundTrip (P : Protocol) (label : String) : Except String Unit := do
     (ini, res) := if fromInit then (sender, receiver') else (receiver', sender)
   if ini.handshakeHash != res.handshakeHash then throw "handshake hashes differ"
 
-/-- pqXX over each KEM in CryptWalker's registry. Patterns, ciphers and hashes are covered by the
+/-- pqXX over each KEM in Cryptlib's registry. Patterns, ciphers and hashes are covered by the
 clatter vectors. -/
 def kemProtocols : List Protocol :=
   Suites.kems.map fun k => ⟨Patterns.pqXX, .kem k k, Suites.chaChaPoly, Suites.blake2s⟩

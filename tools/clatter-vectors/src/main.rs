@@ -1,7 +1,7 @@
 //! Deterministic PQ Noise vectors from clatter, in the cacophony vector format.
 //!
 //! Every key is generated from fixed bytes and every encapsulation's coins are
-//! `SHAKE256(seed || 0x00)[..32]`, the value CryptWalker's ML-KEM draws from a seed, so a
+//! `SHAKE256(seed || 0x00)[..32]`, the value Cryptlib's ML-KEM draws from a seed, so a
 //! party built from the recorded `*_encap_seeds` makes exactly the same ciphertexts.
 
 use std::cell::RefCell;
@@ -68,7 +68,7 @@ fn push(bytes: &[u8]) {
     QUEUE.with(|q| q.borrow_mut().extend(bytes.iter().copied()));
 }
 
-/// A key pair from `d || z`, with its private key in the `ek || d || z` form CryptWalker reads.
+/// A key pair from `d || z`, with its private key in the `ek || d || z` form Cryptlib reads.
 fn keypair<K: Kem>(l: &str) -> (KeyPair<K::PubKey, K::SecretKey>, Vec<u8>) {
     push(&label(l, 64));
     let kp = K::genkey_rng(&mut ScriptRng).unwrap();
