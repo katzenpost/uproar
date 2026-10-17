@@ -3,25 +3,25 @@ SPDX-FileCopyrightText: Copyright (C) 2026 David Stainton
 SPDX-License-Identifier: AGPL-3.0-only
 -/
 
-import CryptWalker.Cipher.AEAD
-import CryptWalker.Hash.Hash
-import CryptWalker.KDF.HKDF
-import CryptWalker.NIKE.NIKE
-import CryptWalker.KEM.KEM
-import CryptWalker.Util.Bytes
+import Cryptlib.Primitives.Cipher.AEAD
+import Cryptlib.Primitives.Hash.Hash
+import Cryptlib.Primitives.KDF.HKDF
+import Cryptlib.Primitives.NIKE.NIKE
+import Cryptlib.Primitives.KEM.KEM
+import Cryptlib.Util.Bytes
 
 /-! # The primitives a Noise protocol is built from
 
-Each is a CryptWalker structure plus the name the Noise protocol string gives it. Keys and
+Each is a Cryptlib structure plus the name the Noise protocol string gives it. Keys and
 ciphertexts cross the handshake as byte strings and are decoded at the point of use. -/
 
 namespace Uproar
 
-open CryptWalker.Cipher.AEAD (AEAD)
-open CryptWalker.Hash.Hash (Hash)
-open CryptWalker.NIKE.NIKE (NIKE)
-open CryptWalker.KEM.KEM (KEM)
-open CryptWalker.Util.Bytes (ofVector toVecN)
+open Cryptlib.Primitives.Cipher.AEAD (AEAD)
+open Cryptlib.Primitives.Hash.Hash (Hash)
+open Cryptlib.Primitives.NIKE.NIKE (NIKE)
+open Cryptlib.Primitives.KEM.KEM (KEM)
+open Cryptlib.Util.Bytes (ofVector toVecN)
 
 inductive NoiseError where
   | decryptFailed
@@ -93,8 +93,8 @@ def digest (b : ByteArray) : ByteArray := ofVector (H.hash.hash b)
 /-- Noise §4.3's `HKDF(ck, ikm, n)`: RFC 5869 with the chaining key as salt and empty info,
 returning `n` outputs of `HASHLEN` bytes. -/
 def hkdf (ck ikm : ByteArray) (n : Nat) : List ByteArray :=
-  let prk := ofVector (CryptWalker.KDF.HKDF.extract H.hash ck ikm)
-  let okm := CryptWalker.KDF.HKDF.expand H.hash prk ByteArray.empty (n * H.hashLen)
+  let prk := ofVector (Cryptlib.Primitives.KDF.HKDF.extract H.hash ck ikm)
+  let okm := Cryptlib.Primitives.KDF.HKDF.expand H.hash prk ByteArray.empty (n * H.hashLen)
   (List.range n).map fun i => okm.extract (i * H.hashLen) ((i + 1) * H.hashLen)
 
 end HashFn
@@ -157,7 +157,7 @@ def pubLen : Nat := K.kem.publicKeySize
 
 def ctLen : Nat := K.kem.ciphertextSize
 
-def run {α} (x : EStateM CryptWalker.KEM.KEM.KEMError K.kem.State α) (seed : Vector UInt8 32) :
+def run {α} (x : EStateM Cryptlib.Primitives.KEM.KEM.KEMError K.kem.State α) (seed : Vector UInt8 32) :
     Result α :=
   match x (K.kem.stateFromSeed seed) with
   | .ok a _ => pure a

@@ -7,8 +7,8 @@ autoImplicit = false
 relaxedAutoImplicit = false
 
 [[require]]
-name = "CryptWalker"
-git = "https://github.com/katzenpost/CryptWalker.git"
+name = "cryptlib"
+git = "https://github.com/katzenpost/cryptlib.git"
 rev = "main"
 
 [[lean_lib]]

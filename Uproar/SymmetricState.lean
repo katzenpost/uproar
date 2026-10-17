@@ -9,7 +9,7 @@ import Uproar.Crypto
 
 namespace Uproar
 
-open CryptWalker.Util.Bytes (toVecN)
+open Cryptlib.Util.Bytes (toVecN)
 
 /-- `2^64 - 1` is reserved: no message is ever sent under it. -/
 def maxNonce : Nat := 2 ^ 64 - 1

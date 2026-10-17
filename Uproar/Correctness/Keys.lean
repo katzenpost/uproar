@@ -26,7 +26,7 @@ end Except
 
 namespace Uproar
 
-open CryptWalker.Util.Bytes (ofVector toVecN size_ofVector toVecN_ofVector)
+open Cryptlib.Util.Bytes (ofVector toVecN size_ofVector toVecN_ofVector)
 
 namespace DH
 
@@ -143,7 +143,7 @@ theorem decodeCt_encode (c : K.kem.Ciphertext) :
   rw [if_pos (size_ofVector _), toVecN_ofVector, K.kem.decode_encode_ct]
   rfl
 
-theorem run_eq_ok {α} {x : EStateM CryptWalker.KEM.KEM.KEMError K.kem.State α}
+theorem run_eq_ok {α} {x : EStateM Cryptlib.Primitives.KEM.KEM.KEMError K.kem.State α}
     {seed : Vector UInt8 32} {a : α} (h : K.run x seed = .ok a) :
     ∃ s', x (K.kem.stateFromSeed seed) = .ok a s' := by
   unfold run at h
