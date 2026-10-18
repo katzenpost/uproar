@@ -8,7 +8,7 @@
    "rev": "6f651738d26db5ac18dd5670bf501cfc63723175",
    "name": "cryptlib",
    "manifestFile": "lake-manifest.json",
-   "inputRev": "main",
+   "inputRev": "6f651738d26db5ac18dd5670bf501cfc63723175",
    "inherited": false,
    "configFile": "lakefile.toml"},
   {"url": "https://github.com/leanprover-community/mathlib4",
