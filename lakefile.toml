@@ -1,4 +1,8 @@
 name = "uproar"
+version = "0.1.0"
+description = "Noise and PQ Noise written in Lean"
+keywords = ["noise", "post-quantum", "cryptography", "protocol"]
+license = "AGPL-3.0-only"
 defaultTargets = ["Uproar"]
 
 [leanOptions]
@@ -9,7 +13,7 @@ relaxedAutoImplicit = false
 [[require]]
 name = "cryptlib"
 git = "https://github.com/katzenpost/cryptlib.git"
-rev = "main"
+rev = "6f651738d26db5ac18dd5670bf501cfc63723175"
 
 [[lean_lib]]
 name = "Uproar"
