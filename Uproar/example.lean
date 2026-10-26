@@ -1,7 +1,7 @@
 import Uproar.Suites
 import Uproar.Session
 import Uproar.IO
-import Cryptlib.Util.newhex
+import Cryptlib.Util.HexBytes
 
 open Uproar
 
@@ -23,7 +23,7 @@ def run (P : Protocol) : IO Unit := do
   for (p, c) in payloads.zip cts do
     IO.println s!"  {p}: {c.size} bytes"
   let same := ini.handshakeHash == res.handshakeHash
-  IO.println s!"  handshake hash {Cryptlib.Util.newhex.byteArrayToHex ini.handshakeHash} (agree: {same})"
+  IO.println s!"  handshake hash {Cryptlib.Util.HexBytes.byteArrayToHex ini.handshakeHash} (agree: {same})"
   if !same then throw (IO.userError "handshake hashes differ")
 
 def main : IO Unit := do
