@@ -2,11 +2,11 @@ import Lean.Data.Json
 
 import Uproar.Suites
 import Uproar.Session
-import Cryptlib.Util.newhex
+import Cryptlib.Util.HexBytes
 
 open Lean
 open Uproar
-open Cryptlib.Util.newhex
+open Cryptlib.Util.HexBytes
 
 /-! Runs the cacophony and snow vector files: both parties are built from the vector's keys, every
 message is written by its sender and checked against the expected ciphertext, read back by the
